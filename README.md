@@ -48,3 +48,7 @@ Anyone who knows the shared email and password has full admin access. Use a stro
 ## Match goals and assists
 
 Admins can open **Admin Dashboard → Match Statistics**, select a tournament and fixture, and enter each player's goals and assists. The active tournament page includes toggle buttons for **Standings**, **Top Scorers**, and **Top Assists**. These values are stored in the existing `app_data` table, so no additional SQL migration is required.
+
+## Multiple photos in articles
+
+The article publishing form now accepts up to 10 images per article. Each image must be under 6 MB. The first selected image is used as the article cover, and all selected images appear in the detailed article view without cropping.

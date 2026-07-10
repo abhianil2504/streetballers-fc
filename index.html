@@ -305,7 +305,8 @@
   .status-pill{display:inline-flex;padding:.25rem .55rem;font-family:var(--font-mono);font-size:.68rem;font-weight:700;text-transform:uppercase;background:var(--lime-500);color:var(--bg-900)}.status-pill.upcoming{background:var(--blue-400)}.status-pill.past{background:var(--grey-600);color:var(--white)}
   .past-tournament-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}.past-card{background:var(--bg-800);border:1px solid var(--line-700);padding:1rem}.past-card img{width:100%;height:140px;object-fit:cover;margin-bottom:.8rem}.past-card h3{font-family:var(--font-display);text-transform:uppercase}.past-card p{color:var(--grey-400);font-size:.85rem}.past-card details{margin-top:.7rem}.past-card summary{cursor:pointer;color:var(--lime-500);text-transform:uppercase;font-size:.75rem;font-weight:700}
   .login-box{max-width:420px}.security-note{font-size:.76rem;color:var(--grey-400);border-left:2px solid var(--gold-400);padding-left:.7rem;margin-bottom:1rem}
-  .modal-image-preview{width:100%;max-height:220px;object-fit:cover;display:none;margin-top:.5rem;border:1px solid var(--line-700)}
+  .modal-image-preview{width:100%;max-height:220px;object-fit:contain;display:none;margin-top:.5rem;border:1px solid var(--line-700);background:var(--bg-900)}
+  .multi-preview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-top:.6rem}.multi-preview-grid:empty{display:none}.multi-preview-grid img{width:100%;height:110px;object-fit:contain;background:var(--bg-900);border:1px solid var(--line-700)}
   @media(max-width:760px){.admin-action-grid,.form-grid,.award-form-grid,.past-tournament-grid{grid-template-columns:1fr}.admin-list-item{align-items:flex-start;flex-direction:column}.admin-nav-btn{width:100%;justify-content:center}}
 
 
@@ -315,6 +316,9 @@
   .detail-modal{max-width:860px;padding:0;overflow-y:auto;overflow-x:hidden;max-height:90vh;}
   .detail-image-wrap{width:100%;max-height:52vh;min-height:180px;display:flex;align-items:center;justify-content:center;background:var(--bg-900);border-bottom:1px solid var(--line-700);padding:.75rem;}
   .detail-cover{display:block;max-width:100%;max-height:48vh;width:auto;height:auto;object-fit:contain;}
+  .detail-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;padding:.8rem;background:var(--bg-900);border-bottom:1px solid var(--line-700)}
+  .detail-gallery.single{grid-template-columns:1fr}.detail-gallery img{display:block;width:100%;height:clamp(220px,42vh,520px);object-fit:contain;background:#050604;border:1px solid var(--line-700)}
+  @media(max-width:640px){.detail-gallery{grid-template-columns:1fr}.multi-preview-grid{grid-template-columns:repeat(2,1fr)}}
   .detail-body-wrap{padding:1.8rem;}
   .detail-kicker{font-family:var(--font-label);font-weight:700;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--lime-500);margin-bottom:.6rem;}
   .detail-title{font-family:var(--font-display);font-size:clamp(1.8rem,5vw,3.2rem);line-height:1.05;text-transform:uppercase;margin-right:2.5rem;}
@@ -623,7 +627,7 @@ const seedTeams=[{team:'Team Vicky',p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0},{team:'Team
 const seedAwards=[{key:'goalkeeper',icon:'🧤',label:'Best Goalkeeper',winner:''},{key:'midfielder',icon:'🎯',label:'Best Midfielder',winner:''},{key:'defender',icon:'🛡️',label:'Best Defender',winner:''},{key:'striker',icon:'⚽',label:'Best Striker',winner:''},{key:'puskas',icon:'🌟',label:'Puskas Award',winner:''},{key:'improved',icon:'📈',label:'Most Improved',winner:''}];
 const seedGallery=[{id:'g1',sectionId:'practice',caption:'Preseason Training Block',image:'',date:'2026-07-02'}];
 const seedMatchStats=[];
-let articles=[],reports=[],tournaments=[],teams=[],awards=[],gallery=[],matchStats=[],isAdmin=false,modalType='article',pendingFile=null,activeGalleryAlbum=null;
+let articles=[],reports=[],tournaments=[],teams=[],awards=[],gallery=[],matchStats=[],isAdmin=false,modalType='article',pendingFile=null,pendingFiles=[],activeGalleryAlbum=null;
 async function readRemote(key,seed){
   const {data,error}=await db.from('app_data').select('value').eq('key',key).maybeSingle();
   if(error){console.error(error);return structuredClone(seed)}
@@ -644,8 +648,19 @@ async function uploadImage(file,folder='uploads'){
   if(error)throw error;
   return db.storage.from('site-images').getPublicUrl(path).data.publicUrl;
 }
+async function uploadImages(files,folder='uploads'){
+  const list=[...(files||[])];
+  if(list.length>10)throw new Error('You can upload up to 10 photos per article.');
+  const urls=[];
+  for(const file of list) urls.push(await uploadImage(file,folder));
+  return urls;
+}
+function itemImages(item){
+  if(Array.isArray(item?.images)&&item.images.length)return item.images.filter(Boolean);
+  return item?.image?[item.image]:[];
+}
 function updateAdminUI(){document.body.classList.toggle('is-admin',isAdmin);document.getElementById('adminNavBtn').textContent=isAdmin?'Admin Dashboard':'Admin Login'}
-function articleCard(x,i){return `<article class="card content-card" tabindex="0" role="button" aria-label="Read ${esc(x.title)}" onclick="openContentDetail('article','${x.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openContentDetail('article','${x.id}')}">${x.image?`<img class="card-image" src="${x.image}" alt="${esc(x.title)}">`:''}<div class="card-badge">#${String(i+1).padStart(2,'0')}</div><div class="tag">${esc(x.tag||'Club News')}</div><h3>${esc(x.title)}</h3><p class="excerpt">${esc(x.excerpt||x.body)}</p><div class="meta"><span>${esc(x.author)}</span><span>${fmtDate(x.date)}</span></div></article>`}
+function articleCard(x,i){const imgs=itemImages(x);return `<article class="card content-card" tabindex="0" role="button" aria-label="Read ${esc(x.title)}" onclick="openContentDetail('article','${x.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openContentDetail('article','${x.id}')}">${imgs[0]?`<img class="card-image" src="${imgs[0]}" alt="${esc(x.title)}">`:''}<div class="card-badge">#${String(i+1).padStart(2,'0')}</div><div class="tag">${esc(x.tag||'Club News')}</div><h3>${esc(x.title)}</h3><p class="excerpt">${esc(x.excerpt||x.body)}</p><div class="meta"><span>${esc(x.author)}</span><span>${fmtDate(x.date)}</span></div></article>`}
 function reportCard(x,i){return `<article class="card content-card" tabindex="0" role="button" aria-label="Read ${esc(x.title)}" onclick="openContentDetail('report','${x.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openContentDetail('report','${x.id}')}">${x.image?`<img class="card-image" src="${x.image}" alt="${esc(x.title)}">`:''}<div class="card-badge mr">#${String(i+1).padStart(2,'0')}</div><div class="tag report">Match Report</div><h3>${esc(x.title)}</h3><div class="score-line">Streetballers FC ${esc(x.score)} ${esc(x.opponent)}</div><p class="excerpt">${esc(x.excerpt||x.body)}</p><div class="meta"><span>${esc(x.author)}</span><span>${fmtDate(x.date)}</span></div></article>`}
 
 function openContentDetail(type,id){
@@ -653,7 +668,9 @@ function openContentDetail(type,id){
   if(!item)return;
   const kicker=type==='article'?(item.tag||'Club News'):'Match Report';
   const score=type==='report'?`<div class="detail-score">Streetballers FC ${esc(item.score)} ${esc(item.opponent)}</div>`:'';
-  detailContent.innerHTML=`${item.image?`<div class="detail-image-wrap"><img class="detail-cover" src="${item.image}" alt="${esc(item.title)}"></div>`:''}<div class="detail-body-wrap"><div class="detail-kicker">${esc(kicker)}</div><h2 class="detail-title" id="detailTitle">${esc(item.title)}</h2>${score}<div class="detail-meta"><span>By ${esc(item.author||'Admin')}</span><span>${fmtDate(item.date)}</span></div><div class="detail-copy">${esc(item.body||item.excerpt||'')}</div></div>`;
+  const imgs=itemImages(item);
+  const photos=imgs.length?`<div class="detail-gallery ${imgs.length===1?'single':''}">${imgs.map((src,idx)=>`<img src="${src}" alt="${esc(item.title)} photo ${idx+1}" loading="lazy">`).join('')}</div>`:'';
+  detailContent.innerHTML=`${photos}<div class="detail-body-wrap"><div class="detail-kicker">${esc(kicker)}</div><h2 class="detail-title" id="detailTitle">${esc(item.title)}</h2>${score}<div class="detail-meta"><span>By ${esc(item.author||'Admin')}</span><span>${fmtDate(item.date)}</span>${imgs.length>1?`<span>${imgs.length} photos</span>`:''}</div><div class="detail-copy">${esc(item.body||item.excerpt||'')}</div></div>`;
   detailOverlay.classList.add('open');
   document.body.style.overflow='hidden';
 }
@@ -754,7 +771,27 @@ function renderAdmin(){if(!isAdmin)return;
 function goTo(id){if(id==='admin'&&!isAdmin)return openLogin();document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+id).classList.add('active');document.querySelectorAll('.nav-link').forEach(l=>l.classList.toggle('active',l.dataset.nav===id));primaryNav.classList.remove('open');scrollTo({top:0,behavior:'auto'});if(id==='admin')renderAdmin()}
 document.querySelectorAll('[data-nav]').forEach(el=>el.addEventListener('click',()=>goTo(el.dataset.nav)));navToggle.onclick=()=>primaryNav.classList.toggle('open');adminNavBtn.onclick=()=>isAdmin?goTo('admin'):openLogin();logoutBtn.onclick=async()=>{await db.auth.signOut();isAdmin=false;updateAdminUI();goTo('home');showToast('Logged out')};
 function openLogin(){modalType='login';modalTitle.textContent='Admin Login';modalNote.textContent='Only authorised administrators can publish or update tournament data.';postForm.innerHTML=`<div class="security-note">Use the shared administrator account created in Supabase Authentication.</div><div class="field"><label for="adminEmail">Admin Email</label><input id="adminEmail" type="email" required autocomplete="username" placeholder="admin@streetballersfc.com"></div><div class="field"><label for="adminPassword">Password</label><input id="adminPassword" type="password" required autocomplete="current-password"></div><button class="btn btn-primary" type="submit">Login</button>`;postForm.onsubmit=handleSubmit;modalOverlay.classList.add('open')}
-function openModal(type){if(!isAdmin)return openLogin();modalType=type;pendingFile=null;modalTitle.textContent=type==='article'?'Publish Article':'Publish Match Report';modalNote.textContent='This content will be visible to all visitors.';postForm.innerHTML=type==='article'?`<div class="field"><label>Title</label><input id="fTitle" required></div><div class="field"><label>Author</label><input id="fAuthor" required value="Admin"></div><div class="field"><label>Category</label><select id="fTag"><option>Tournament</option><option>Club News</option><option>Announcement</option></select></div><div class="field"><label>Cover Photo</label><input id="fImage" type="file" accept="image/*"><img id="imagePreview" class="modal-image-preview"></div><div class="field"><label>Article</label><textarea id="fBody" required></textarea></div><button class="btn btn-primary" type="submit">Publish Article</button>`:`<div class="field"><label>Title</label><input id="fTitle" required></div><div class="field"><label>Author</label><input id="fAuthor" required value="Admin"></div><div class="field"><label>Opponent</label><input id="fOpponent" required></div><div class="field"><label>Score</label><input id="fScore" required placeholder="3-2"></div><div class="field"><label>Match Photo</label><input id="fImage" type="file" accept="image/*"><img id="imagePreview" class="modal-image-preview"></div><div class="field"><label>Report</label><textarea id="fBody" required></textarea></div><button class="btn btn-primary" type="submit">Publish Match Report</button>`;postForm.onsubmit=handleSubmit;modalOverlay.classList.add('open');fImage.onchange=e=>{pendingFile=e.target.files[0]||null;if(pendingFile){imagePreview.src=URL.createObjectURL(pendingFile);imagePreview.style.display='block'}}}
+function openModal(type){
+  if(!isAdmin)return openLogin();
+  modalType=type;pendingFile=null;pendingFiles=[];
+  modalTitle.textContent=type==='article'?'Publish Article':'Publish Match Report';
+  modalNote.textContent='This content will be visible to all visitors.';
+  postForm.innerHTML=type==='article'
+    ?`<div class="field"><label>Title</label><input id="fTitle" required></div><div class="field"><label>Author</label><input id="fAuthor" required value="Admin"></div><div class="field"><label>Category</label><select id="fTag"><option>Tournament</option><option>Club News</option><option>Announcement</option></select></div><div class="field"><label>Article Photos</label><input id="fImage" type="file" accept="image/*" multiple><small class="field-help">Select up to 10 photos. Each photo must be under 6 MB. The first photo becomes the article cover.</small><div id="imagePreviewGrid" class="multi-preview-grid"></div></div><div class="field"><label>Article</label><textarea id="fBody" required></textarea></div><button class="btn btn-primary" type="submit">Publish Article</button>`
+    :`<div class="field"><label>Title</label><input id="fTitle" required></div><div class="field"><label>Author</label><input id="fAuthor" required value="Admin"></div><div class="field"><label>Opponent</label><input id="fOpponent" required></div><div class="field"><label>Score</label><input id="fScore" required placeholder="3-2"></div><div class="field"><label>Match Photo</label><input id="fImage" type="file" accept="image/*"><img id="imagePreview" class="modal-image-preview"></div><div class="field"><label>Report</label><textarea id="fBody" required></textarea></div><button class="btn btn-primary" type="submit">Publish Match Report</button>`;
+  postForm.onsubmit=handleSubmit;
+  modalOverlay.classList.add('open');
+  fImage.onchange=e=>{
+    if(type==='article'){
+      pendingFiles=[...e.target.files].slice(0,10);
+      if(e.target.files.length>10)showToast('Only the first 10 photos will be uploaded');
+      imagePreviewGrid.innerHTML=pendingFiles.map((file,i)=>`<img src="${URL.createObjectURL(file)}" alt="Selected photo ${i+1}">`).join('');
+    }else{
+      pendingFile=e.target.files[0]||null;
+      if(pendingFile){imagePreview.src=URL.createObjectURL(pendingFile);imagePreview.style.display='block'}
+    }
+  };
+}
 function closeModal(){modalOverlay.classList.remove('open')}modalOverlay.onclick=e=>{if(e.target===modalOverlay)closeModal()};
 async function handleSubmit(e){
  e.preventDefault();
@@ -765,11 +802,12 @@ async function handleSubmit(e){
  }
  try{
    const body=fBody.value.trim(),today=new Date().toISOString().slice(0,10);
-   const image=await uploadImage(pendingFile,modalType==='article'?'articles':'match-reports');
    if(modalType==='article'){
-     articles.push({id:'a'+Date.now(),title:fTitle.value.trim(),author:fAuthor.value.trim(),tag:fTag.value,body,excerpt:body.slice(0,160)+(body.length>160?'…':''),date:today,image});
+     const images=await uploadImages(pendingFiles,'articles');
+     articles.push({id:'a'+Date.now(),title:fTitle.value.trim(),author:fAuthor.value.trim(),tag:fTag.value,body,excerpt:body.slice(0,160)+(body.length>160?'…':''),date:today,images,image:images[0]||''});
      await save(KEYS.articles,articles);showToast('Article published for everyone');
    }else{
+     const image=await uploadImage(pendingFile,'match-reports');
      reports.push({id:'r'+Date.now(),title:fTitle.value.trim(),author:fAuthor.value.trim(),opponent:fOpponent.value.trim(),score:fScore.value.trim(),body,excerpt:body.slice(0,160)+(body.length>160?'…':''),date:today,image});
      await save(KEYS.reports,reports);showToast('Match report published for everyone');
    }
