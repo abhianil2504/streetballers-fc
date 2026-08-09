@@ -62,3 +62,6 @@ Admins can now manage the tournament lifecycle from **Admin Dashboard → Tourna
 - The public Tournament page, homepage tournament labels, standings, leaders, honours, and fixture showcase now follow the active tournament automatically.
 - **Upcoming Fixtures** only shows fixtures whose scheduled start time is still in the future. Fixture comparisons use India Standard Time (Asia/Kolkata) and refresh every minute while the site is open.
 - A second tournament cannot be started while another tournament is active; close the current tournament first.
+
+## Standings scoring
+The tournament table uses: Win = 2 points, Draw = 1 point, Loss = 0 points. Played (P), Goal Difference (GD), and Points (PTS) are calculated automatically. GS means Goals Scored; GA means Goals Against; GD = GS - GA. Standings sort by PTS, then GD, then GS.
