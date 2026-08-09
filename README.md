@@ -52,3 +52,13 @@ Admins can open **Admin Dashboard → Match Statistics**, select a tournament an
 ## Multiple photos in articles
 
 The article publishing form now accepts up to 10 images per article. Each image must be under 6 MB. The first selected image is used as the article cover, and all selected images appear in the detailed article view without cropping.
+
+## Tournament lifecycle update
+
+Admins can now manage the tournament lifecycle from **Admin Dashboard → Tournaments**:
+
+- **Start Tournament** makes an upcoming tournament the single current tournament, creates a fresh standings table for its teams, and resets award winners for the new competition.
+- **Close Tournament** snapshots the current standings and award winners, marks the tournament as Past, and preserves it under Past Tournaments.
+- The public Tournament page, homepage tournament labels, standings, leaders, honours, and fixture showcase now follow the active tournament automatically.
+- **Upcoming Fixtures** only shows fixtures whose scheduled start time is still in the future. Fixture comparisons use India Standard Time (Asia/Kolkata) and refresh every minute while the site is open.
+- A second tournament cannot be started while another tournament is active; close the current tournament first.

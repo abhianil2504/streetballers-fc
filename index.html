@@ -384,20 +384,20 @@
       <div class="floodlight l"></div>
       <div class="floodlight r"></div>
       <div class="rain"></div>
-      <div class="eyebrow">Monsoon Cup &middot; Season 1 is live</div>
+      <div class="eyebrow" id="homeTournamentEyebrow">Current tournament</div>
       <h1>Streetballers<span class="accent">the pitch talks. we write it down.</span></h1>
       <p class="lede">Fixtures, tactics and post-match verdicts from Streetballers FC — squad vs squad in our own Monsoon Cup, plus matches out against other clubs.</p>
       <div class="hero-actions">
         <button class="btn btn-primary admin-only" onclick="openModal('article')">Post an Article</button>
         <button class="btn btn-primary admin-only" onclick="openModal('matchreport')">Post a Match Report</button>
-        <a class="btn btn-blue" data-nav="tournaments">Monsoon Cup →</a>
+        <a class="btn btn-blue" data-nav="tournaments" id="homeTournamentCta">Tournament →</a>
       </div>
     </div>
 
     <div class="fixture-showcase">
       <div class="fixture-showcase-head">
         <div>
-          <div class="eyebrow" style="margin-bottom:0.4rem;">Monsoon Cup — Season 1</div>
+          <div class="eyebrow" id="homeFixtureTournament" style="margin-bottom:0.4rem;">Current tournament</div>
           <h3>Upcoming Fixtures</h3>
         </div>
         <a class="view-all" data-nav="tournaments">Full fixtures &amp; standings →</a>
@@ -639,6 +639,20 @@ async function save(key,val){
 }
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function fmtDate(d){return new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}
+function getActiveTournament(){return [...tournaments].filter(t=>t.status==='active').sort((a,b)=>(b.activatedAt||b.startDate||'').localeCompare(a.activatedAt||a.startDate||''))[0]||null}
+function getNextTournament(){return [...tournaments].filter(t=>t.status==='upcoming').sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||''))[0]||null}
+function emptyAwards(){return seedAwards.map(a=>({...a,winner:''}))}
+function blankStandings(teamNames=[]){return teamNames.map(team=>({team,p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}))}
+function indiaDateString(){const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));return `${parts.year}-${parts.month}-${parts.day}`}
+function fixtureStartEpoch(f){
+  if(!f?.date)return Number.POSITIVE_INFINITY;
+  const text=String(f.time||'').split(/[–—-]/)[0].trim();
+  let h=23,m=59;
+  const hit=text.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if(hit){h=Number(hit[1]);m=Number(hit[2]||0);const ap=(hit[3]||'').toUpperCase();if(ap==='PM'&&h<12)h+=12;if(ap==='AM'&&h===12)h=0;}
+  return new Date(`${f.date}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00+05:30`).getTime();
+}
+function upcomingFixtures(t){const now=Date.now();return [...(t?.fixtures||[])].filter(f=>fixtureStartEpoch(f)>=now).sort((a,b)=>fixtureStartEpoch(a)-fixtureStartEpoch(b))}
 async function uploadImage(file,folder='uploads'){
   if(!file)return '';
   if(file.size>6*1024*1024)throw new Error('Please choose an image smaller than 6 MB.');
@@ -744,19 +758,29 @@ function loadStatsRows(){
  (saved?.entries?.length?saved.entries:[{player:'',goals:0,assists:0}]).forEach(addStatsRow);
 }
 function renderTournaments(){
- const featured=[...tournaments].filter(t=>t.status!=='past').sort((a,b)=>a.status==='active'?-1:b.status==='active'?1:a.startDate.localeCompare(b.startDate))[0];
- if(!featured){activeTournamentArea.innerHTML='<div class="section"><div class="empty-state">No active or upcoming tournament.</div></div>';fixtureShowcaseList.innerHTML='<div class="empty-state">Fixtures will appear here when announced.</div>'}
- else{
-  const gd=teams.map(t=>({...t,gd:Number(t.gf)-Number(t.ga)})).sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf);
-  activeTournamentArea.innerHTML=`<div class="cup-banner">${featured.image?`<img class="tournament-hero-image" src="${featured.image}" alt="${esc(featured.name)}">`:''}<span class="status-pill ${featured.status}">${featured.status}</span><div class="eyebrow" style="margin-top:1rem">Featured Tournament</div><h2>${esc(featured.name)} <span class="g">${esc(featured.season)}</span></h2><div class="cup-meta-row"><div class="item">📅 <b>${fmtDate(featured.startDate)}</b></div><div class="item">📍 <b>${esc(featured.venue)}</b></div></div><p class="lede" style="margin-top:1rem">${esc(featured.details)}</p><div class="team-strip">${featured.teams.map(n=>`<div class="team-chip"><span class="dot" style="background:var(--lime-500)"></span>${esc(n)}</div>`).join('')}</div></div>
-  <div class="section"><div class="section-head"><h2>Fixtures</h2></div><div class="table-scroll"><table class="league"><thead><tr><th>Date</th><th>Time</th><th>Fixture</th></tr></thead><tbody>${featured.fixtures.map(f=>`<tr><td>${fmtDate(f.date)}</td><td>${esc(f.time)}</td><td>${esc(f.home)} vs ${esc(f.away)}</td></tr>`).join('')||'<tr><td colspan="3">Fixtures to be announced.</td></tr>'}</tbody></table></div></div>
+ const featured=getActiveTournament();
+ const next=getNextTournament();
+ homeTournamentEyebrow.textContent=featured?`${featured.name} · ${featured.season} is live`:next?`${next.name} · ${next.season} coming up`:'No active tournament';
+ homeTournamentCta.textContent=featured?`${featured.name} →`:next?`${next.name} →`:'Tournaments →';
+ homeFixtureTournament.textContent=featured?`${featured.name} — ${featured.season}`:next?`${next.name} — ${next.season}`:'No active tournament';
+ if(!featured){
+  activeTournamentArea.innerHTML=next?`<div class="cup-banner">${next.image?`<img class="tournament-hero-image" src="${next.image}" alt="${esc(next.name)}">`:''}<span class="status-pill upcoming">upcoming</span><div class="eyebrow" style="margin-top:1rem">Next Tournament</div><h2>${esc(next.name)} <span class="g">${esc(next.season)}</span></h2><div class="cup-meta-row"><div class="item">📅 <b>${fmtDate(next.startDate)}</b></div><div class="item">📍 <b>${esc(next.venue)}</b></div></div><p class="lede" style="margin-top:1rem">${esc(next.details)}</p></div>`:'<div class="section"><div class="empty-state">No active tournament right now.</div></div>';
+  fixtureShowcaseList.innerHTML='<div class="empty-state">No upcoming fixtures for an active tournament.</div>';
+ }else{
+  const sourceTeams=teams.length?teams:(featured.standings||blankStandings(featured.teams));
+  const gd=sourceTeams.map(t=>({...t,gd:Number(t.gf)-Number(t.ga)})).sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf);
+  activeTournamentArea.innerHTML=`<div class="cup-banner">${featured.image?`<img class="tournament-hero-image" src="${featured.image}" alt="${esc(featured.name)}">`:''}<span class="status-pill active">active</span><div class="eyebrow" style="margin-top:1rem">Current Tournament</div><h2>${esc(featured.name)} <span class="g">${esc(featured.season)}</span></h2><div class="cup-meta-row"><div class="item">📅 <b>${fmtDate(featured.startDate)}</b></div><div class="item">📍 <b>${esc(featured.venue)}</b></div></div><p class="lede" style="margin-top:1rem">${esc(featured.details)}</p><div class="team-strip">${featured.teams.map(n=>`<div class="team-chip"><span class="dot" style="background:var(--lime-500)"></span>${esc(n)}</div>`).join('')}</div></div>
+  <div class="section"><div class="section-head"><h2>Fixtures</h2></div><div class="table-scroll"><table class="league"><thead><tr><th>Date</th><th>Time</th><th>Fixture</th></tr></thead><tbody>${(featured.fixtures||[]).map(f=>`<tr><td>${fmtDate(f.date)}</td><td>${esc(f.time)}</td><td>${esc(f.home)} vs ${esc(f.away)}</td></tr>`).join('')||'<tr><td colspan="3">Fixtures to be announced.</td></tr>'}</tbody></table></div></div>
   <div class="section" style="padding-top:0"><div class="section-head"><h2>Tournament Table &amp; Leaders</h2><div class="leader-toggle"><button type="button" class="active" data-leader-view="standings" onclick="showLeaderView('standings')">Standings</button><button type="button" data-leader-view="scorers" onclick="showLeaderView('scorers')">Top Scorers</button><button type="button" data-leader-view="assists" onclick="showLeaderView('assists')">Top Assists</button></div></div><div id="leader-standings" class="leader-panel active"><div class="table-scroll"><table class="league"><thead><tr><th class="num">Pos</th><th>Team</th><th class="num">P</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${gd.map((t,i)=>`<tr><td class="num">${i+1}</td><td>${esc(t.team)}</td><td class="num">${t.p}</td><td class="num">${t.w}</td><td class="num">${t.d}</td><td class="num">${t.l}</td><td class="num">${t.gd}</td><td class="num pts">${t.pts}</td></tr>`).join('')}</tbody></table></div></div><div id="leader-scorers" class="leader-panel">${renderPlayerLeaders(featured.id,'goals')}</div><div id="leader-assists" class="leader-panel">${renderPlayerLeaders(featured.id,'assists')}</div></div>
   <div class="section" style="padding-top:0"><div class="section-head"><h2>Individual Honours</h2></div><div class="honours-grid">${awards.map(a=>`<div class="honour-card"><div class="medal">${a.icon}</div><div class="label">${esc(a.label)}</div><div class="status">${a.winner?esc(a.winner):'To be decided'}</div></div>`).join('')}</div></div>`;
-  fixtureShowcaseList.innerHTML=featured.fixtures.slice(0,3).map(f=>`<div class="fixture-item"><div class="fx-when"><span>${fmtDate(f.date)}</span><span class="fx-badge">${featured.status}</span></div><div class="fx-teams">${esc(f.home)} <span class="vs">vs</span> ${esc(f.away)}</div><div class="fx-time">${esc(f.time)}</div></div>`).join('')||'<div class="empty-state">Fixtures to be announced.</div>';
+  const upcoming=upcomingFixtures(featured).slice(0,3);
+  fixtureShowcaseList.innerHTML=upcoming.map(f=>`<div class="fixture-item"><div class="fx-when"><span>${fmtDate(f.date)}</span><span class="fx-badge">upcoming</span></div><div class="fx-teams">${esc(f.home)} <span class="vs">vs</span> ${esc(f.away)}</div><div class="fx-time">${esc(f.time)}</div></div>`).join('')||'<div class="empty-state">No more upcoming fixtures in the current tournament.</div>';
  }
- const past=tournaments.filter(t=>t.status==='past').sort((a,b)=>b.startDate.localeCompare(a.startDate));
- pastTournamentsSection.style.display=past.length?'block':'none';pastTournamentGrid.innerHTML=past.map(t=>`<div class="past-card">${t.image?`<img src="${t.image}" alt="${esc(t.name)}">`:''}<span class="status-pill past">Past</span><h3>${esc(t.name)} ${esc(t.season)}</h3><p>${fmtDate(t.startDate)} · ${esc(t.venue)}</p><details><summary>View details</summary><p>${esc(t.details)}</p><p><b>Teams:</b> ${esc(t.teams.join(', '))}</p></details></div>`).join('');
+ const past=tournaments.filter(t=>t.status==='past').sort((a,b)=>(b.closedDate||b.startDate||'').localeCompare(a.closedDate||a.startDate||''));
+ pastTournamentsSection.style.display=past.length?'block':'none';
+ pastTournamentGrid.innerHTML=past.map(t=>{const archived=t.standings||[];const archivedAwards=t.awards||[];return `<div class="past-card">${t.image?`<img src="${t.image}" alt="${esc(t.name)}">`:''}<span class="status-pill past">Past</span><h3>${esc(t.name)} ${esc(t.season)}</h3><p>${fmtDate(t.startDate)} · ${esc(t.venue)}</p><details><summary>View details</summary><p>${esc(t.details)}</p><p><b>Teams:</b> ${esc((t.teams||[]).join(', '))}</p>${archived.length?`<p><b>Final table:</b> ${archived.sort((a,b)=>Number(b.pts)-Number(a.pts)).map(x=>`${esc(x.team)} (${Number(x.pts)||0} pts)`).join(' · ')}</p>`:''}${archivedAwards.some(a=>a.winner)?`<p><b>Honours:</b> ${archivedAwards.filter(a=>a.winner).map(a=>`${esc(a.label)} — ${esc(a.winner)}`).join(' · ')}</p>`:''}</details></div>`}).join('');
 }
+
 function renderAdmin(){if(!isAdmin)return;
  adminContentList.innerHTML=[...articles.map(x=>({...x,type:'Article'})),...reports.map(x=>({...x,type:'Match Report'}))].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="admin-list-item"><div><b>${esc(x.title)}</b><br><small>${x.type} · ${fmtDate(x.date)}</small></div><div class="admin-row-actions"><button class="btn btn-small btn-danger" onclick="deleteContent('${x.type}','${x.id}')">Delete</button></div></div>`).join('')||'<div class="empty-state">No published content.</div>';
  adminScoreboardBody.innerHTML=teams.map((t,i)=>`<tr><td><input value="${esc(t.team)}" data-i="${i}" data-k="team"></td>${['p','w','d','l','gf','ga','pts'].map(k=>`<td><input type="number" min="0" value="${t[k]}" data-i="${i}" data-k="${k}" style="width:68px"></td>`).join('')}</tr>`).join('');
@@ -764,7 +788,7 @@ function renderAdmin(){if(!isAdmin)return;
  if(!statsTournamentSelect.dataset.bound){statsTournamentSelect.onchange=populateStatsFixtures;statsFixtureSelect.onchange=loadStatsRows;addStatsRowBtn.onclick=()=>addStatsRow();statsTournamentSelect.dataset.bound='1'}
  populateStatsFixtures();
  adminAwardsGrid.innerHTML=awards.map((a,i)=>`<div class="award-edit-card"><div class="field"><label>${a.icon} ${esc(a.label)}</label><input data-award="${i}" value="${esc(a.winner)}" placeholder="Winner name"></div></div>`).join('');
- adminTournamentList.innerHTML=tournaments.map(t=>`<div class="admin-list-item"><div><b>${esc(t.name)} ${esc(t.season)}</b><br><small>${t.status.toUpperCase()} · ${fmtDate(t.startDate)} · ${esc(t.venue)}</small></div><div class="admin-row-actions"><button class="btn btn-small btn-outline" onclick="editTournament('${t.id}')">Edit</button><button class="btn btn-small btn-danger" onclick="deleteTournament('${t.id}')">Delete</button></div></div>`).join('');
+ adminTournamentList.innerHTML=tournaments.map(t=>`<div class="admin-list-item"><div><b>${esc(t.name)} ${esc(t.season)}</b><br><small>${t.status.toUpperCase()} · ${fmtDate(t.startDate)} · ${esc(t.venue)}</small></div><div class="admin-row-actions"><button class="btn btn-small btn-outline" onclick="editTournament('${t.id}')">Edit</button>${t.status==='active'?`<button class="btn btn-small btn-danger" onclick="closeTournament('${t.id}')">Close Tournament</button>`:t.status==='upcoming'?`<button class="btn btn-small btn-primary" onclick="startTournament('${t.id}')">Start Tournament</button>`:''}<button class="btn btn-small btn-danger" onclick="deleteTournament('${t.id}')">Delete</button></div></div>`).join('');
  gallerySectionSelect.innerHTML=`<option value="practice">Practice Sessions</option>`+tournaments.map(t=>`<option value="${t.id}">${esc(t.name)} ${esc(t.season)}</option>`).join('');
  adminGalleryList.innerHTML=gallery.map(g=>{const t=tournaments.find(x=>x.id===g.sectionId);const section=g.sectionId==='practice'?'Practice Sessions':t?`${t.name} ${t.season}`:'Removed tournament';return `<div class="admin-list-item"><div><b>${esc(g.caption)}</b><br><small>${esc(section)} · ${g.date?fmtDate(g.date):''}</small></div><div class="admin-row-actions"><button class="btn btn-small btn-danger" onclick="deleteGalleryPhoto('${g.id}')">Delete</button></div></div>`}).join('')||'<div class="empty-state">No gallery photos uploaded.</div>';
 }
@@ -819,7 +843,10 @@ scoreboardForm.onsubmit=async e=>{e.preventDefault();document.querySelectorAll('
 matchStatsForm.onsubmit=async e=>{e.preventDefault();const tournamentId=statsTournamentSelect.value;const fixtureIndex=Number(statsFixtureSelect.value);const key=fixtureKey(tournamentId,fixtureIndex);const entries=[...statsEntryRows.querySelectorAll('.stat-entry-grid')].map(r=>({player:r.querySelector('.stat-player').value.trim(),goals:Number(r.querySelector('.stat-goals').value)||0,assists:Number(r.querySelector('.stat-assists').value)||0})).filter(x=>x.player);const obj={tournamentId,fixtureIndex,fixtureKey:key,entries,updatedAt:new Date().toISOString()};const i=matchStats.findIndex(x=>x.tournamentId===tournamentId&&x.fixtureKey===key);i>=0?matchStats[i]=obj:matchStats.push(obj);await save(KEYS.matchstats,matchStats);renderAll();showToast('Goals and assists updated for everyone')};
 awardsForm.onsubmit=async e=>{e.preventDefault();document.querySelectorAll('[data-award]').forEach(inp=>awards[+inp.dataset.award].winner=inp.value.trim());await save(KEYS.awards,awards);renderAll();showToast('Award winners updated for everyone')};
 function parseFixtures(s){return s.split('\n').map(x=>x.trim()).filter(Boolean).map(line=>{const [date,time,home,away]=line.split('|').map(x=>x.trim());return{date,time,home,away}}).filter(f=>f.date&&f.home&&f.away)}
-tournamentForm.onsubmit=async e=>{e.preventDefault();let image='';const existing=tournaments.find(t=>t.id===tournamentId.value);try{image=tournamentImage.files[0]?await uploadImage(tournamentImage.files[0],'tournaments'):existing?.image||''}catch(err){return showToast(err.message)}const obj={id:tournamentId.value||'t'+Date.now(),name:tournamentName.value.trim(),season:tournamentSeason.value.trim(),venue:tournamentVenue.value.trim(),startDate:tournamentDate.value,status:tournamentStatus.value,details:tournamentDetails.value.trim(),teams:tournamentTeams.value.split(',').map(x=>x.trim()).filter(Boolean),image,fixtures:parseFixtures(tournamentFixtures.value)};const idx=tournaments.findIndex(t=>t.id===obj.id);idx>=0?tournaments[idx]=obj:tournaments.push(obj);await save(KEYS.tournaments,tournaments);tournamentForm.reset();tournamentId.value='';renderAll();showToast('Tournament saved')};
+tournamentForm.onsubmit=async e=>{e.preventDefault();let image='';const existing=tournaments.find(t=>t.id===tournamentId.value);try{image=tournamentImage.files[0]?await uploadImage(tournamentImage.files[0],'tournaments'):existing?.image||''}catch(err){return showToast(err.message)}const obj={...(existing||{}),id:tournamentId.value||'t'+Date.now(),name:tournamentName.value.trim(),season:tournamentSeason.value.trim(),venue:tournamentVenue.value.trim(),startDate:tournamentDate.value,status:tournamentStatus.value,details:tournamentDetails.value.trim(),teams:tournamentTeams.value.split(',').map(x=>x.trim()).filter(Boolean),image,fixtures:parseFixtures(tournamentFixtures.value)};const otherActive=getActiveTournament();if(obj.status==='active'&&otherActive&&otherActive.id!==obj.id)return showToast(`Close ${otherActive.name} before starting another tournament`);const becomingActive=obj.status==='active'&&existing?.status!=='active';if(existing?.status==='active'&&obj.status==='past'){obj.standings=structuredClone(teams);obj.awards=structuredClone(awards);obj.closedDate=indiaDateString()}if(becomingActive){obj.activatedAt=new Date().toISOString();teams=blankStandings(obj.teams);awards=emptyAwards();await save(KEYS.teams,teams);await save(KEYS.awards,awards)}const idx=tournaments.findIndex(t=>t.id===obj.id);idx>=0?tournaments[idx]=obj:tournaments.push(obj);await save(KEYS.tournaments,tournaments);tournamentForm.reset();tournamentId.value='';renderAll();showToast('Tournament saved')};
+async function startTournament(id){const target=tournaments.find(t=>t.id===id);if(!target)return;const current=getActiveTournament();if(current&&current.id!==id)return showToast(`Close ${current.name} before starting a new tournament`);if(target.status==='past')return showToast('Past tournaments cannot be restarted');if(!confirm(`Start ${target.name} ${target.season} as the current tournament?`))return;target.status='active';target.activatedAt=new Date().toISOString();teams=blankStandings(target.teams);awards=emptyAwards();await Promise.all([save(KEYS.tournaments,tournaments),save(KEYS.teams,teams),save(KEYS.awards,awards)]);renderAll();showToast('Tournament started and set as current')}
+async function closeTournament(id){const target=tournaments.find(t=>t.id===id);if(!target||target.status!=='active')return;if(!confirm(`Close ${target.name} ${target.season}? Its current standings and awards will be archived.`))return;target.standings=structuredClone(teams);target.awards=structuredClone(awards);target.closedDate=indiaDateString();target.status='past';await save(KEYS.tournaments,tournaments);renderAll();showToast('Tournament closed and moved to Past Tournaments')}
+
 function editTournament(id){const t=tournaments.find(x=>x.id===id);if(!t)return;tournamentId.value=t.id;tournamentName.value=t.name;tournamentSeason.value=t.season;tournamentVenue.value=t.venue;tournamentDate.value=t.startDate;tournamentStatus.value=t.status;tournamentTeams.value=t.teams.join(', ');tournamentDetails.value=t.details;tournamentFixtures.value=t.fixtures.map(f=>`${f.date} | ${f.time} | ${f.home} | ${f.away}`).join('\n');scrollTo({top:0,behavior:'smooth'})}
 async function deleteTournament(id){if(!confirm('Delete this tournament and its gallery section?'))return;tournaments=tournaments.filter(t=>t.id!==id);gallery=gallery.filter(g=>g.sectionId!==id);await save(KEYS.tournaments,tournaments);await save(KEYS.gallery,gallery);renderAll();showToast('Tournament deleted')}
 galleryForm.onsubmit=async e=>{e.preventDefault();let image='';try{image=await uploadImage(galleryImage.files[0],'gallery')}catch(err){return showToast(err.message)}gallery.push({id:'g'+Date.now(),sectionId:gallerySectionSelect.value,caption:galleryCaption.value.trim(),image,date:new Date().toISOString().slice(0,10)});await save(KEYS.gallery,gallery);galleryForm.reset();renderAll();showToast('Gallery photo uploaded')};
@@ -844,6 +871,7 @@ async function initialiseApp(){
     if(isAdmin)await save(KEYS.tournaments,tournaments);
   }
   updateAdminUI();renderAll();
+  setInterval(renderTournaments,60000);
 }
 db.auth.onAuthStateChange((_event,session)=>{isAdmin=!!session;updateAdminUI()});
 initialiseApp();
